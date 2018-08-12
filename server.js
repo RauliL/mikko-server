@@ -1,13 +1,10 @@
-const bodyParser = require('body-parser');
 const buildUrl = require('build-url');
 const express = require('express');
 const fs = require('fs');
-const lame = require('lame');
 const md5 = require('md5');
-const os = require('os');
 const path = require('path');
 const request = require('request');
-const speaker = require('speaker');
+const uuid = require('uuid');
 const winston = require('winston');
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
@@ -35,110 +32,124 @@ const VOICE_CONFIGURATIONS = {
 };
 
 // Configure logging.
-const log = new (winston.Logger)({
+const log = winston.createLogger({
   transports: [
-    new (winston.transports.Console)({
-      colorize: !process.env.NO_COLOR,
-      timestamp: true
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.printf((info) =>
+          `${info.timestamp} ${info.level}: ${info.message}`
+        )
+      )
     })
   ]
 });
 
 const app = express();
-const queue = [];
-let isPlaying = false;
+const http = require('http').Server(app);
+const io = require('socket.io')(http);
+const connectedClients = {};
+const isBlank = RegExp.prototype.test.bind(/^\s*$/);
+const isValidNick = RegExp.prototype.test.bind(/^[a-zA-Z0-9_]{1,15}$/);
 
-app.use(bodyParser.json());
 app.set('view engine', 'pug');
+app.use(express.static('public'));
 
 app.get('/', (req, res) => {
   res.render('index', { voices: Object.keys(VOICE_CONFIGURATIONS) });
 });
 
-app.post('/', (req, res) => {
-  const { voice, text } = req.body;
+app.get('/say/:hash', (req, res) => res.sendFile(
+  `${req.params.hash}.mp3`,
+  { root: path.join(__dirname, 'tmp') }
+));
 
-  if ([voice, text].find(RegExp.prototype.test.bind(/^\s*$/)) != null) {
-    log.error(`${req.ip}: Received empty request.`);
-    res.status(400).send({ error: 'Empty request.' });
-    return;
-  }
+io.on('connection', (socket) => {
+  const id = uuid.v1();
+  const client = { id, socket };
 
-  const voiceConfig = VOICE_CONFIGURATIONS[voice];
+  connectedClients[id] = client;
 
-  if (!voiceConfig) {
-    log.error(`${req.ip}: Unrecognized voice: ${voice}`);
-    res.status(400).send({ error: 'Unrecognized voice.' });
-    return;
-  }
-
-  res.json({ nep: true });
-  log.info(`${req.ip}: <${voice}> ${text}`);
-
-  const hash = buildHash(text, voiceConfig);
-  const file = path.join(os.tmpdir(), `tts-${hash}.mp3`);
-
-  if (fs.existsSync(file)) {
-    addToQueue(file);
-    return;
-  }
-
-  const url = buildUrl('http://cache-a.oddcast.com', {
-    path: `c_fs/${hash}.mp3`,
-    queryParams: {
-      engine: voiceConfig.engine,
-      language: voiceConfig.language,
-      voice: voiceConfig.voice,
-      text: encodeURIComponent(text),
-      useUTF8: 1
+  socket.on('disconnect', () => {
+    delete connectedClients[id];
+    if (client.nick) {
+        log.info(`Quit: ${client.nick}`);
+        io.emit('quit', client.nick);
     }
   });
 
-  try {
-    request(url).pipe(fs.createWriteStream(file)).on('close', () => addToQueue(file));
-  } catch (err) {
-    log.error(err);
-  }
-});
+  socket.on('join', (nick) => {
+    if (!isValidNick(nick)) {
+      socket.emit('err', 'Invalid nick.');
+      return;
+    }
+    if (client.nick) {
+      socket.emit('err', 'You already have a nick.');
+      return;
+    }
+    client.nick = nick;
+    log.info(`Join: ${nick}`);
+    io.emit('join', nick);
+    socket.emit('welcome');
+  });
 
-app.listen(PORT, () => {
-  log.info(`Listening on port ${PORT}.`);
-});
+  socket.on('say', (voice, text) => {
+    if (!client.nick) {
+      return;
+    }
 
-function addToQueue(file) {
-  queue.push(file);
-  if (!isPlaying) {
-    playFromQueue();
-  }
-}
+    if (isBlank(text)) {
+      socket.emit('err', 'Empty message.');
+      return;
+    } else if (isBlank(voice)) {
+      socket.emit('err', 'No voice given');
+      return;
+    }
 
-function playFromQueue() {
-  if (isPlaying || !queue.length) {
-    return;
-  }
+    const voiceConfig = VOICE_CONFIGURATIONS[voice];
 
-  const decoder = new lame.Decoder();
-  const file = queue[0];
+    if (!voiceConfig) {
+      log.error(`${client.nick} tried to use unrecognized voice: \`${voice}'`);
+      socket.emit('err', 'Unrecognized voice.');
+      return;
+    }
 
-  queue.shift();
-  fs.createReadStream(file).pipe(decoder).once('format', () => {
-    const output = new speaker({
-      channels: 1,
-      bitDepth: 16,
-      sampleRate: 22050,
-      mode: lame.MONO
-    });
+    log.info(`${client.nick} (as ${voice}): ${text}`);
 
-    isPlaying = true;
-    decoder.pipe(output);
-    output.once('close', () => {
-      isPlaying = false;
-      if (queue.length > 0) {
-        playFromQueue();
+    const hash = buildHash(text, voiceConfig);
+    const file = path.join(__dirname, 'tmp', `${hash}.mp3`);
+
+    if (fs.existsSync(file)) {
+      io.emit('say', client.nick, text, hash);
+      return;
+    }
+
+    const url = buildUrl('http://cache-a.oddcast.com', {
+      path: `c_fs/${hash}.mp3`,
+      queryParams: {
+        engine: voiceConfig.engine,
+        language: voiceConfig.language,
+        voice: voiceConfig.voice,
+        text,
+        useUTF8: 1
       }
     });
+
+    request(url)
+      .on('error', (err) => {
+        log.error(err);
+        io.emit('err', 'Unable to say that.');
+      })
+      .pipe(fs.createWriteStream(file))
+      .on('close', () => {
+        io.emit('say', client.nick, text, hash);
+      });
   });
-}
+});
+
+http.listen(PORT, () => {
+  log.info(`Listening on port ${PORT}.`);
+});
 
 function buildHash(text, voiceConfig) {
   const { engine, language, voice } = voiceConfig;

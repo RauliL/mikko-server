@@ -1,15 +1,16 @@
-# Mikko Server
+# Mikko Server (partyline version)
 
-Takes in text over HTTP and plays it on the host machine using mikko TTS
+Takes in text over HTTP and plays it on to other people using the web site
+using Mikko TTS.
 
-# Installing
+## Installing
+
+```bash
+$ npm install
+```
+
+## Running
 
 ```
-npm install
-```
-
-# Running
-
-```
-npm start
+$ npm start
 ```
