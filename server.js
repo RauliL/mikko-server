@@ -74,7 +74,7 @@ io.on('connection', (socket) => {
     delete connectedClients[id];
     if (client.nick) {
         log.info(`Quit: ${client.nick}`);
-        io.emit('quit', client.nick);
+        io.emit('quit', id, client.nick);
     }
   });
 
@@ -89,8 +89,11 @@ io.on('connection', (socket) => {
     }
     client.nick = nick;
     log.info(`Join: ${nick}`);
-    io.emit('join', nick);
-    socket.emit('welcome');
+    io.emit('join', id, nick);
+    socket.emit('welcome', Object.keys(connectedClients).map((id) => ({
+      id: id,
+      nick: connectedClients[id].nick
+    })));
   });
 
   socket.on('say', (voice, text) => {

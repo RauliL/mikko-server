@@ -7,19 +7,23 @@ window.addEventListener('DOMContentLoaded', () => {
   const submit = document.querySelector('button[type=submit]');
   const isBlank = RegExp.prototype.test.bind(/^\s*$/);
   const socket = window.io();
-  const logContainer = document.querySelector('#log nav.panel');
+  const logContainer = document.getElementById('log');
+  const usersContainer = document.getElementById('users');
   const queue = [];
+  const users = {};
   let isPlaying = false;
   let isJoined = false;
 
   const log = (text) => {
-    const block = document.createElement('div');
+    const block = document.createElement('li');
 
-    block.classList.add('panel-block');
     if (typeof text === 'object' && text.nodeType === 1) {
       block.appendChild(text);
     } else {
       block.innerText = `${moment().format('HH:MM:ss')} ${text}`;
+    }
+    if (logContainer.children.length === 50) {
+      logContainer.removeChild(logContainer.lastChild);
     }
     if (logContainer.firstChild) {
       logContainer.insertBefore(block, logContainer.firstChild);
@@ -59,6 +63,39 @@ window.addEventListener('DOMContentLoaded', () => {
     audio.play();
   };
 
+  const updateUserList = () => {
+    const sortedUsers = Object.keys(users)
+      .map((id) => users[id])
+      .sort((a, b) => a > b ? 1 : a < b ? -1 : 0);
+    const heading = document.createElement('p');
+
+    usersContainer.innerHTML = '';
+    heading.classList.add('panel-heading');
+    heading.innerText = `${sortedUsers.length} connected user(s)`;
+    usersContainer.appendChild(heading);
+    sortedUsers.forEach((nick) => {
+      const div = document.createElement('div');
+
+      div.classList.add('panel-block');
+      div.innerText = nick;
+      usersContainer.appendChild(div);
+    });
+  };
+
+  const addConnectedUser = (id, nick) => {
+    if (!users[id]) {
+      users[id] = nick;
+      updateUserList();
+    }
+  };
+
+  const removeConnectedUser = (id, nick) => {
+    if (users[id]) {
+      delete users[id];
+      updateUserList();
+    }
+  };
+
   voiceField.style.display = 'none';
   textLabel.innerText = 'Nick';
   submit.innerText = 'Join';
@@ -83,23 +120,26 @@ window.addEventListener('DOMContentLoaded', () => {
     textInput.focus();
   });
 
-  socket.on('welcome', () => {
+  socket.on('welcome', (connectedUsers) => {
     isJoined = true;
     voiceField.style.display = 'block';
     textLabel.innerText = 'Text';
     submit.innerText = 'Send';
+    connectedUsers.forEach((user) => addConnectedUser(user.id, user.nick));
   });
 
   socket.on('err', (message) => {
     notify(message, 'danger');
   });
 
-  socket.on('join', (nick) => {
+  socket.on('join', (id, nick) => {
     log(`Joins: ${nick}`);
+    addConnectedUser(id, nick);
   });
 
-  socket.on('quit', (nick) => {
+  socket.on('quit', (id, nick) => {
     log(`Quit: ${nick}`);
+    removeConnectedUser(id, nick);
   });
 
   socket.on('say', (nick, text, hash) => {
