@@ -19,7 +19,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (typeof text === 'object' && text.nodeType === 1) {
       block.appendChild(text);
     } else {
-      block.innerText = `${moment().format('HH:MM:SS')} ${text}`;
+      block.innerText = `${moment().format('HH:MM:ss')} ${text}`;
     }
     if (logContainer.firstChild) {
       logContainer.insertBefore(block, logContainer.firstChild);
