@@ -1,6 +1,8 @@
 import moment from 'moment';
 import { el } from 'redom';
 
+const TIMESTAMP_FORMAT = 'HH:mm:ss';
+
 export default class MessageLog {
   constructor () {
     this.el = el('ul', {
@@ -13,7 +15,7 @@ export default class MessageLog {
   }
 
   add (message, color = null) {
-    const li = el('li', `${moment().format('HH:MM:ss')} ${message}`);
+    const li = el('li', `${moment().format(TIMESTAMP_FORMAT)} ${message}`);
 
     if (color) {
       li.classList.add(`is-${color}`);
