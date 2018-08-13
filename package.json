@@ -17,6 +17,9 @@
   "bugs": {
     "url": "https://github.com/RauliL/mikko-server-partyline/issues"
   },
+  "engines": {
+    "node": ">=8.0"
+  },
   "homepage": "https://github.com/RauliL/mikko-server-partyline#readme",
   "dependencies": {
     "@babel/core": "^7.0.0-rc.1",
