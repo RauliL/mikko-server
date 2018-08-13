@@ -7,6 +7,10 @@ const request = require('request');
 const uuid = require('uuid');
 const winston = require('winston');
 
+const { isBlank, isValidNick } = require('../common/utils');
+
+const clientRegistry = require('./client-registry');
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
 const VOICE_CONFIGURATIONS = {
   mikko: {
@@ -48,9 +52,6 @@ const log = winston.createLogger({
 const app = express();
 const http = require('http').Server(app);
 const io = require('socket.io')(http);
-const connectedClients = {};
-const isBlank = RegExp.prototype.test.bind(/^\s*$/);
-const isValidNick = RegExp.prototype.test.bind(/^[a-zA-Z0-9_]{1,15}$/);
 
 app.set('view engine', 'pug');
 app.use(express.static('public'));
@@ -61,51 +62,49 @@ app.get('/', (req, res) => {
 
 app.get('/say/:hash', (req, res) => res.sendFile(
   `${req.params.hash}.mp3`,
-  { root: path.join(__dirname, 'tmp') }
+  { root: path.join(__dirname, '..', 'cache') }
 ));
 
 io.on('connection', (socket) => {
-  const id = uuid.v1();
-  const client = { id, socket };
-
-  connectedClients[id] = client;
+  const client = clientRegistry.registerClient();
 
   socket.on('disconnect', () => {
-    delete connectedClients[id];
+    clientRegistry.unregisterClient(client);
     if (client.nick) {
-        log.info(`Quit: ${client.nick}`);
-        io.emit('quit', id, client.nick);
+      log.info(`Quit: ${client.nick}`);
+      io.emit('quit', client);
     }
   });
 
   socket.on('join', (nick) => {
     if (!isValidNick(nick)) {
-      socket.emit('err', 'Invalid nick.');
+      socket.emit('client error', 'Invalid nickname.');
       return;
     }
     if (client.nick) {
-      socket.emit('err', 'You already have a nick.');
+      socket.emit('client error', 'You already have a nickname.');
+      return;
+    }
+    if (clientRegistry.findClientByNick(nick)) {
+      socket.emit('client error', 'That nickname has already been taken.');
       return;
     }
     client.nick = nick;
     log.info(`Join: ${nick}`);
-    io.emit('join', id, nick);
-    socket.emit('welcome', Object.keys(connectedClients).map((id) => ({
-      id: id,
-      nick: connectedClients[id].nick
-    })));
+    io.emit('join', client);
+    socket.emit('welcome', clientRegistry.getClientsWithNick());
   });
 
-  socket.on('say', (voice, text) => {
+  socket.on('say', ({ text, voice }) => {
     if (!client.nick) {
       return;
     }
 
     if (isBlank(text)) {
-      socket.emit('err', 'Empty message.');
+      socket.emit('client error', 'Empty message.');
       return;
     } else if (isBlank(voice)) {
-      socket.emit('err', 'No voice given');
+      socket.emit('client error', 'No voice given.');
       return;
     }
 
@@ -113,17 +112,21 @@ io.on('connection', (socket) => {
 
     if (!voiceConfig) {
       log.error(`${client.nick} tried to use unrecognized voice: \`${voice}'`);
-      socket.emit('err', 'Unrecognized voice.');
+      socket.emit('client error', 'Unrecognized voice.');
       return;
     }
 
     log.info(`${client.nick} (as ${voice}): ${text}`);
 
     const hash = buildHash(text, voiceConfig);
-    const file = path.join(__dirname, 'tmp', `${hash}.mp3`);
+    const file = path.join(__dirname, '..', 'cache', `${hash}.mp3`);
 
     if (fs.existsSync(file)) {
-      io.emit('say', client.nick, text, hash);
+      io.emit('say', {
+        nick: client.nick,
+        text,
+        hash
+      });
       return;
     }
 
@@ -141,11 +144,15 @@ io.on('connection', (socket) => {
     request(url)
       .on('error', (err) => {
         log.error(err);
-        io.emit('err', 'Unable to say that.');
+        io.emit('client error', 'Unable to say that.');
       })
       .pipe(fs.createWriteStream(file))
       .on('close', () => {
-        io.emit('say', client.nick, text, hash);
+        io.emit('say', {
+          nick: client.nick,
+          text,
+          hash
+        });
       });
   });
 });

@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "description": "Takes in text over HTTP and plays it on to other people using the web site",
   "scripts": {
-    "clear-cache": "rm ./tmp/*.mp3"
+    "build": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "start": "npm run build && node ./backend/index.js",
+    "clear-cache": "rm ./cache/*.mp3"
   },
   "repository": {
     "type": "git",
@@ -16,13 +19,26 @@
   },
   "homepage": "https://github.com/RauliL/mikko-server-partyline#readme",
   "dependencies": {
+    "@babel/core": "^7.0.0-rc.1",
+    "@babel/preset-env": "^7.0.0-rc.1",
+    "babel-loader": "^8.0.0-beta.4",
     "build-url": "^1.0.10",
+    "bulma": "^0.7.1",
+    "css-loader": "^1.0.0",
     "express": "^4.16.2",
+    "lodash": "^4.17.10",
     "md5": "^2.2.1",
+    "moment": "^2.22.2",
+    "node-sass": "^4.9.3",
     "pug": "^2.0.3",
+    "redom": "^3.12.7",
     "request": "^2.88.0",
+    "sass-loader": "^7.1.0",
     "socket.io": "^2.1.1",
+    "style-loader": "^0.22.1",
     "uuid": "^3.3.2",
+    "webpack": "^4.16.5",
+    "webpack-command": "^0.4.1",
     "winston": "^3.0.0"
   }
 }

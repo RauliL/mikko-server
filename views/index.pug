@@ -4,30 +4,8 @@ html
     title Mikko
     meta(charset="utf-8")
     meta(name="viewport", content="width=device-width, initial-scale=1")
-    link(rel="stylesheet", href="//cdnjs.cloudflare.com/ajax/libs/bulma/0.7.1/css/bulma.css")
   body
-    .container
-      form
-        .field#field-voice
-          label(for="voice") Voice
-          .control
-            .select
-              select#voice
-                each voice in voices
-                  option(value=voice)= voice[0].toUpperCase() + voice.substring(1)
-        .field
-          label#label-text(for="text") Text
-          .control
-            input#text.input(type="text", autofocus)
-        .field
-          .control
-            button.button(type="submit") Send
-    .container
-      .columns
-        .column
-          ul#log(style="list-style: none")
-        .column.is-one-third
-          nav#users.panel
-    script(src="//momentjs.com/downloads/moment.min.js")
+    script.
+      window.VOICES = !{JSON.stringify(voices)};
     script(src="/socket.io/socket.io.js")
     script(src="/app.js")
