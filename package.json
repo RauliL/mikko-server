@@ -5,7 +5,7 @@
   "scripts": {
     "build": "webpack --mode production",
     "watch": "webpack --mode development --watch",
-    "start": "npm run build && node ./backend/index.js",
+    "start": "node ./backend/index.js",
     "clear-cache": "rm ./cache/*.mp3"
   },
   "repository": {

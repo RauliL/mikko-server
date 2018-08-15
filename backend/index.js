@@ -1,39 +1,14 @@
-const buildUrl = require('build-url');
 const express = require('express');
-const fs = require('fs');
-const md5 = require('md5');
 const path = require('path');
-const request = require('request');
-const uuid = require('uuid');
 const winston = require('winston');
+
+const oddcast = require('./oddcast');
 
 const { isBlank, isValidNick } = require('../common/utils');
 
 const clientRegistry = require('./client-registry');
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 8080;
-const VOICE_CONFIGURATIONS = {
-  mikko: {
-    engine: 4,
-    language: 23,
-    voice: 1
-  },
-  milla: {
-    engine: 2,
-    language: 23,
-    voice: 1
-  },
-  marko: {
-    engine: 2,
-    language: 23,
-    voice: 2
-  },
-  alan: {
-    engine: 2,
-    language: 1,
-    voice: 9
-  }
-};
 
 // Configure logging.
 const log = winston.createLogger({
@@ -54,11 +29,13 @@ const http = require('http').Server(app);
 const io = require('socket.io')(http);
 
 app.set('view engine', 'pug');
+app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.static('public'));
 
-app.get('/', (req, res) => {
-  res.render('index', { voices: Object.keys(VOICE_CONFIGURATIONS) });
-});
+app.get('/', (req, res) => res.render(
+  'index',
+  { voices: oddcast.listAllVoices() }
+));
 
 app.get('/say/:hash', (req, res) => res.sendFile(
   `${req.params.hash}.mp3`,
@@ -108,7 +85,7 @@ io.on('connection', (socket) => {
       return;
     }
 
-    const voiceConfig = VOICE_CONFIGURATIONS[voice];
+    const voiceConfig = oddcast.findVoiceByName(voice);
 
     if (!voiceConfig) {
       log.error(`${client.nick} tried to use unrecognized voice: \`${voice}'`);
@@ -117,42 +94,17 @@ io.on('connection', (socket) => {
     }
 
     log.info(`${client.nick} (as ${voice}): ${text}`);
-
-    const hash = buildHash(text, voiceConfig);
-    const file = path.join(__dirname, '..', 'cache', `${hash}.mp3`);
-
-    if (fs.existsSync(file)) {
-      io.emit('say', {
-        nick: client.nick,
-        text,
-        hash
-      });
-      return;
-    }
-
-    const url = buildUrl('http://cache-a.oddcast.com', {
-      path: `c_fs/${hash}.mp3`,
-      queryParams: {
-        engine: voiceConfig.engine,
-        language: voiceConfig.language,
-        voice: voiceConfig.voice,
-        text,
-        useUTF8: 1
-      }
-    });
-
-    request(url)
-      .on('error', (err) => {
-        log.error(err);
-        io.emit('client error', 'Unable to say that.');
-      })
-      .pipe(fs.createWriteStream(file))
-      .on('close', () => {
+    oddcast.retrieve(text, voiceConfig)
+      .then((hash) => {
         io.emit('say', {
           nick: client.nick,
           text,
           hash
         });
+      })
+      .catch((err) => {
+        log.error(err);
+        io.emit('client error', 'Unable to say that.');
       });
   });
 });
@@ -160,16 +112,3 @@ io.on('connection', (socket) => {
 http.listen(PORT, () => {
   log.info(`Listening on port ${PORT}.`);
 });
-
-function buildHash(text, voiceConfig) {
-  const { engine, language, voice } = voiceConfig;
-  const fragments = [
-    `<engineID>${engine}</engineID>`,
-    `<voiceID>${voice}</voiceID>`,
-    `<langID>${language}</langID>`,
-    '<ext>mp3</ext>',
-    text
-  ];
-
-  return md5(fragments.join(''));
-}

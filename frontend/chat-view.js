@@ -1,4 +1,3 @@
-import { capitalize } from 'lodash';
 import { el } from 'redom';
 
 import { isBlank } from '../common/utils';
@@ -18,10 +17,14 @@ export default class ChatView {
           ))),
           el('.column', el('.field', el('.control', el('.select',
             this.voice = el('select',
-              window.VOICES.map((voice) => el(
-                'option',
-                { value: voice },
-                capitalize(voice)
+              Object.keys(window.VOICES).map((language) => el(
+                'optgroup',
+                { label: language },
+                window.VOICES[language].map((voice) => el(
+                  'option',
+                  { value: voice },
+                  voice
+                ))
               ))
             )
           ))))
