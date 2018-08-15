@@ -7,6 +7,7 @@ using Mikko TTS.
 
 ```bash
 $ npm install
+$ npm run build  # To compile static assets.
 ```
 
 ## Running
