@@ -13,7 +13,7 @@
     "url": "git+https://github.com/RauliL/mikko-server-partyline.git"
   },
   "author": "Rauli Laine <rauli.laine@iki.fi> (https://raulil.github.io/)",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/RauliL/mikko-server-partyline/issues"
   },
