@@ -33,6 +33,15 @@ module.exports.retrieve = (text, voice) => new Promise((resolve, reject) => {
 
   request(buildUrl(text, voice, hash))
     .on('error', reject)
-    .pipe(fs.createWriteStream(file))
-    .on('close', () => resolve(hash));
+    .on('response', (response) => {
+      if (response.statusCode !== 200 ||
+          response.headers['content-type'] !== 'audio/mpeg') {
+        reject(new Error('Server didn\'t return any audio'));
+        return;
+      }
+
+      response
+        .pipe(fs.createWriteStream(file))
+        .on('close', () => resolve(hash));
+    });
 });
