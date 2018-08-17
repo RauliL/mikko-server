@@ -22,8 +22,10 @@ export default class ChatView {
                 { label: language },
                 window.VOICES[language].map((voice) => el(
                   'option',
-                  { value: voice },
-                  voice
+                  { value: voice.name },
+                  voice.dialect
+                    ? `${voice.name} (${voice.dialect})`
+                    : voice.name
                 ))
               ))
             )
@@ -36,6 +38,7 @@ export default class ChatView {
       )
     );
 
+    this.voice.value = 'Mikko';
     this.voice.addEventListener('change', () => this.input.focus());
 
     this.form.addEventListener('submit', (ev) => {

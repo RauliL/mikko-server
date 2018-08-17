@@ -32,10 +32,9 @@ app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, '..', 'views'));
 app.use(express.static('public'));
 
-app.get('/', (req, res) => res.render(
-  'index',
-  { voices: oddcast.listAllVoices() }
-));
+app.get('/', (req, res) => res.render('index', {
+  voices: oddcast.listAllVoices()
+}));
 
 app.get('/say/:hash', (req, res) => res.sendFile(
   `${req.params.hash}.mp3`,
